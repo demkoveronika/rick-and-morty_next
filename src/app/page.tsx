@@ -1,113 +1,194 @@
+'use client'
+
 import Image from "next/image";
+import { ChangeEvent, useEffect, useState } from "react";
+import { useAppDispatch, useAppSelector } from "./lib/hooks";
+import { getCharacters, getLocations } from "./lib/api";
+import { Character } from "@/types/Character";
+import { setCharacters } from "@/features/characters";
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import clsx from 'clsx';
+import "./globals.css";
+import { Location } from "@/types/Location";
+import SelectGender from "./ui/SelectGender";
+import SelectStatus from "./ui/SelectStatus";
+import SelectSpecies from "./ui/SelectSpecies";
+import { TextField } from "@mui/material";
+import { current } from "@reduxjs/toolkit";
 
 export default function Home() {
+  const dispatch = useAppDispatch();
+  const characters = useAppSelector(state => state.characters);
+
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [filteredCharacters, setFilteredCharacters] = useState<Character[]>([]);
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState<number>(0);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handleSearchChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(event.target.value);
+  }
+
+  useEffect(() => {
+    setFilteredCharacters(characters.filter((character) =>
+      character.name.toLowerCase().includes(searchTerm.toLowerCase())
+    ))
+  }, [characters, searchTerm])
+
+  useEffect(() => {
+    const fetchCharactersWithLocations = async () => {
+      try {
+        setIsLoading(true);
+        const fetchCharacters: Character[] = await getCharacters(currentPage);
+        const fetchLocations: Location[] = await getLocations();
+
+        setTotalPages(15)
+
+        const charactersWithLocations = fetchCharacters.map(character => {
+          const characterLocation = fetchLocations.find(location => location.url === character.location.url)
+
+          return {
+            ...character,
+            locationData: characterLocation || null,
+          }
+        })
+
+        dispatch(setCharacters(charactersWithLocations));
+      }
+      catch {
+        throw new Error('Failed to fetch characters');
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchCharactersWithLocations();
+  }, [dispatch, currentPage])
+
+  const pathname = usePathname();
+
+  const renderPageButtons = () => {
+    const pageButtons = [];
+    const maxButtons = 4;
+
+    let startPage = Math.max(currentPage - Math.floor(maxButtons / 2), 1);
+    let endPage = startPage + maxButtons - 1;
+
+    if (endPage > totalPages) {
+      endPage = totalPages;
+      startPage = Math.max(endPage - maxButtons + 1, 1)
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+      pageButtons.push(
+        <button
+          key={i}
+          onClick={() => handlePageChange(i)}
+          disabled={currentPage === i}
+          className="w-10 h-10 border border-gray-400 items-center font-semibold"
+        >
+          {i}
+        </button>
+      )
+    }
+
+    return pageButtons;
+  }
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 w-full max-w-5xl items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">src/app/page.tsx</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:size-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{" "}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
+    <div className="bg-white">
+
+      <header className="flex flex-row justify-between pr-10 pl-10 pt-4 pb-4">
+        <Image src="/images/Rick_and_Morty_logo.avif" alt="rick and morty logo" width={50} height={50} />
+
+        <div className="font-medium place-items-center text-center pt-3">
+          <Link href={'/characters'} className={clsx('pr-8', {'font-bold': pathname === '/'})}>Characters</Link>
+          <Link href={'/locations'} className={clsx('pr-8', {'font-bold': pathname === '/location'})}>Locations</Link>
+          <Link href={'/episodes'} className={clsx('pr-8', {'font-bold': pathname === '/episode'})}>Episodes</Link>
         </div>
+      </header>
+
+      <hr className="w-full border border-gray-400" />
+
+      <div className="w-full flex justify-center p-10">
+        <Image src="/images/Rick_and_Morty.png" alt="rick and morty" width={900} height={200} />
       </div>
 
-      <div className="relative z-[-1] flex place-items-center before:absolute before:h-[300px] before:w-full before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-full after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 sm:before:w-[480px] sm:after:w-[240px] before:lg:h-[360px]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
+      <div className="flex flex-row gap-6 justify-center items-center p-10">
+        <TextField
+          id="standard-search"
+          label="Search character..."
+          type="search"
+          variant="outlined"
+          className="w-full"
+          value={searchTerm}
+          onChange={handleSearchChange}
         />
+        <SelectSpecies />
+        <SelectStatus />
+        <SelectGender />
       </div>
 
-      <div className="mb-32 grid text-center lg:mb-0 lg:w-full lg:max-w-5xl lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Docs{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
+      <main className="grid grid-cols-4 gap-4 bg-center min-h-screen flex-col items-center p-10">
+        {filteredCharacters.map(character => {
+          let statusText;
+          let statusClass;
 
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Learn{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
+          switch (character.status) {
+            case 'Alive':
+              statusText = 'Alive'
+              statusClass = 'border border-green-300 pt-1 pb-1 pr-3 pl-3 text-green-600'
+              break;
+            case 'Dead':
+              statusText = 'Dead'
+              statusClass = 'border border-red-300 pt-1 pb-1 pr-3 pl-3 text-red-600'
+              break;
+            case 'unknown':
+              statusText = 'Unknown'
+              statusClass = 'border border-gray-300 pt-1 pb-1 pr-3 pl-3 text-gray-600'
+          }
 
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Templates{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Explore starter templates for Next.js.
-          </p>
-        </a>
+          return (
+            <div key={character.id} className="border border-black p-4 bg-white rounded-lg flex flex-col transition-transform duration-300 transform hover:scale-105 cursor-pointer">
+              <Link href={`/characters/${character.id}`}>
+                <h2 className="text-center font-bold text-xl">{character.name}</h2>
+                <div className="flex flex-row justify-between">
+                  <Image src={character.image} alt={character.name} width={200} height={200} className="items-right mt-4 rounded-full" />
+                  <div className="flex flex-col">
+                    <p className={`${statusClass} font-semibold m-5 text-center`}>{statusText}</p>
+                    <div className="border border-blue-400 pt-1 pb-1 pr-3 pl-3 ml-5">
+                      <p className="font-semibold text-blue-400 text-center">Last location:</p>
+                      <p className="font-medium text-sm text-center">{character.location.name}</p>
+                    </div>
+                    <div className="border border-yellow-300 pt-1 pb-1 pr-3 pl-3 ml-5 mt-4">
+                      <p className="text-center font-semibold">{character.species}</p>
+                    </div>
+                  </div>
+                </div>
+              </Link>
 
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Deploy{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-balance text-sm opacity-50">
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
+            </div>
+        )})}
+      </main>
+
+      <div className="flex gap-7 justify-center pb-10">
+        <button onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1} className="w-10 h-10 border border-gray-400 items-center font-semibold">👈</button>
+        {renderPageButtons()}
+        <button onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage === totalPages} className="w-10 h-10 border border-gray-400 items-center font-semibold">👉</button>
       </div>
-    </main>
+
+      <footer className="text-center pt-4 pb-4">
+        <hr className="w-full border border-gray-400" />
+        <h2 className="font-bold text-lg pt-4">Made Veronika Demko for Rick and Morty ❤️</h2> 
+      </footer>
+    </div>
   );
 }
